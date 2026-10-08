@@ -1,52 +1,38 @@
-export interface PowerLawAssumptions {
-  exponent: number;
-  log10Intercept: number;
-  supportMultiplier: number;
-  resistanceMultiplier: number;
-  usdKrw: number;
+import { simulate, type Assumptions } from './simulation.ts';
+
+// Default growth assumption; prices are anchored to the user's starting price.
+export const DEFAULT_POWER_LAW_BETA = 5.845;
+const GENESIS_UTC = Date.UTC(2009, 0, 3), DAY_MS = 86400000;
+
+export function parsePowerLawBeta(value: string): number {
+  const beta = Number(value);
+  if (value.trim() === '' || !Number.isFinite(beta) || beta < 0) throw new Error('Power Law 베타는 0 이상의 숫자로 입력하세요.');
+  return beta;
 }
 
-// Burger (2019)의 중앙 회귀 계수. 배수와 원화 환산율은 앱의 설명용 가정이다.
-export const defaultPowerLaw: PowerLawAssumptions = {
-  exponent: 5.84509376, log10Intercept: -17.01593313,
-  supportMultiplier: 0.5, resistanceMultiplier: 2, usdKrw: 1400,
-};
-export const POWER_LAW_SOURCE = 'https://hcburger.com/blog/powerlaw/';
-const GENESIS_UTC = Date.UTC(2009, 0, 3);
-const DAY_MS = 86_400_000;
-
-export interface PowerLawYearResult {
-  year: number; days: number;
-  supportUsd: number; fairUsd: number; resistanceUsd: number;
-  support: number; fair: number; resistance: number;
+// Annual snapshots use January 1 consistently, including the starting snapshot.
+export function daysSinceGenesis(year: number): number {
+  if (!Number.isInteger(year) || year < 2010 || year > 2200) throw new Error('Power Law는 2010~2200년 범위에서 사용할 수 있습니다.');
+  return (Date.UTC(year, 0, 1) - GENESIS_UTC) / DAY_MS;
 }
 
-export function daysSinceGenesis(date: Date): number {
-  const days = (date.getTime() - GENESIS_UTC) / DAY_MS;
-  if (!Number.isFinite(days) || days <= 0) throw new Error('Power Law 날짜는 2009-01-03 이후여야 합니다.');
-  return days;
+export function powerLawPrices(a: Assumptions, beta: number): Record<number, number> {
+  parsePowerLawBeta(String(beta));
+  if (!Number.isFinite(a.btcPrice) || a.btcPrice <= 0) throw new Error('BTC 가격은 0보다 커야 합니다.');
+  const startDays = daysSinceGenesis(a.startYear);
+  if (!Number.isInteger(a.endYear) || a.endYear < a.startYear || a.endYear > 2200) throw new Error('Power Law 연도 범위를 확인하세요.');
+  const prices: Record<number, number> = {};
+  for (let year = a.startYear; year <= a.endYear; year++) {
+    // P(t) = P0 * (t / t0)^beta. Recalibrating A = P0 / t0^beta
+    // keeps the starting price unchanged when beta changes.
+    const price = a.btcPrice * (daysSinceGenesis(year) / startDays) ** beta;
+    if (!Number.isFinite(price) || price <= 0) throw new Error('Power Law 가격이 계산 범위를 벗어났습니다. 베타나 기간을 줄여 주세요.');
+    prices[year] = price;
+  }
+  return prices;
 }
 
-export function validatePowerLaw(a: PowerLawAssumptions): void {
-  if (![a.exponent, a.log10Intercept, a.supportMultiplier, a.resistanceMultiplier, a.usdKrw].every(Number.isFinite)) throw new Error('Power Law 가정을 모두 숫자로 입력해 주세요.');
-  if (a.exponent <= 0) throw new Error('Power Law 지수 β는 0보다 커야 합니다.');
-  if (a.supportMultiplier <= 0 || a.supportMultiplier > 1) throw new Error('지지 배수는 0보다 크고 1 이하여야 합니다.');
-  if (a.resistanceMultiplier < 1) throw new Error('저항 배수는 1 이상이어야 합니다.');
-  if (a.usdKrw <= 0) throw new Error('고정 USD/KRW 환산율은 0보다 커야 합니다.');
-}
-
-export function calculatePowerLawYear(year: number, a: PowerLawAssumptions): PowerLawYearResult {
-  validatePowerLaw(a);
-  if (!Number.isInteger(year) || year < 2009 || year > 2200) throw new Error('Power Law 연도는 2009~2200 범위여야 합니다.');
-  const days = daysSinceGenesis(new Date(Date.UTC(year, 11, 31)));
-  const fairUsd = 10 ** (a.log10Intercept + a.exponent * Math.log10(days));
-  const supportUsd = fairUsd * a.supportMultiplier, resistanceUsd = fairUsd * a.resistanceMultiplier;
-  const fair = fairUsd * a.usdKrw, support = supportUsd * a.usdKrw, resistance = resistanceUsd * a.usdKrw;
-  if (![fairUsd, supportUsd, resistanceUsd, fair, support, resistance].every(v => Number.isFinite(v) && v > 0)) throw new Error('Power Law 계산 범위를 벗어났습니다. 계수나 환산율을 줄여 주세요.');
-  return { year, days, fairUsd, supportUsd, resistanceUsd, fair, support, resistance };
-}
-
-export function calculatePowerLawRange(startYear: number, endYear: number, a: PowerLawAssumptions): PowerLawYearResult[] {
-  if (!Number.isInteger(startYear) || !Number.isInteger(endYear) || startYear < 2009 || endYear > 2200 || endYear < startYear) throw new Error('Power Law 연도 범위를 확인해 주세요.');
-  return Array.from({ length: endYear - startYear + 1 }, (_, i) => calculatePowerLawYear(startYear + i, a));
+export function simulatePowerLaw(a: Assumptions, beta: number) {
+  // The same price path determines purchases and portfolio valuations.
+  return simulate(a, powerLawPrices(a, beta));
 }

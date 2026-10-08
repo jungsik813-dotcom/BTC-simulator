@@ -25,9 +25,3 @@ test('잘못된 입력값 거부',()=>{
  assert.throws(()=>simulate({...defaults,btcPrice:0}));
  assert.throws(()=>simulate({...defaults,inflation:-100}));
 });
-test('외부 가격 경로로 BTC 평가와 DCA를 계산한다',()=>{
- const rows=simulate({...defaults,startYear:2026,endYear:2027,btcQuantity:1,monthlyBtc:100,btcPrice:50},{2026:50,2027:200});
- assert.equal(rows[0].btcPrice,50);
- assert.equal(rows[1].btcPrice,200);
- assert.equal(rows[1].btcQuantity,7);
-});

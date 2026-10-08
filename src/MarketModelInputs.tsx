@@ -3,7 +3,13 @@ import { defaultMarketSettings, type MarketSettings } from './marketSettings';
 import './marketModel.css';
 const regimeFields:{key:keyof RegimeAssumptions;label:string}[]=[{key:'btcMean',label:'BTC 수익률 중심 (%)'},{key:'btcVolatility',label:'BTC 변동성 (%)'},{key:'stockMean',label:'QQQ 수익률 중심 (%)'},{key:'stockVolatility',label:'QQQ 변동성 (%)'},{key:'correlation',label:'BTC–QQQ 충격 상관계수'}];
 
-export function MarketModelInputs({settings:s,onChange,usesTam}:{settings:MarketSettings;onChange:(s:MarketSettings)=>void;usesTam:boolean}) {
+export function MarketModelInputs({settings:s,onChange,baseReturns}:{settings:MarketSettings;onChange:(s:MarketSettings)=>void;baseReturns:{btcMean:number;stockMean:number}}) {
+  const displayedReturn=(r:Regime,key:'btcMean'|'stockMean')=>r==='normal'?baseReturns[key]:((1+baseReturns[key]/100)*(1+Number(s.regimes[r][key])/100)/(1+Number(s.regimes.normal[key])/100)-1)*100;
+  const editRegime=(r:Regime,key:keyof RegimeAssumptions,value:string)=>{
+    const mean=key==='btcMean'||key==='stockMean';
+    const stored=mean&&value.trim()!==''?String(((1+Number(value)/100)*(1+Number(s.regimes.normal[key])/100)/(1+baseReturns[key]/100)-1)*100):value;
+    onChange({...s,regimes:{...s.regimes,[r]:{...s.regimes[r],[key]:stored}}});
+  };
   const scalar=(key:keyof MarketSettings['inputs'],label:string,unit='%')=><label><span>{label}</span><div className="input-wrap"><input type="number" step="any" value={s.inputs[key]} onChange={e=>onChange({...s,inputs:{...s.inputs,[key]:e.target.value}})}/><span>{unit}</span></div></label>;
   return <div className="market-model">
     <div className="section-heading"><div><p className="eyebrow">FAT TAIL · MARKET REGIME · JUMP</p><h3>시장 움직임 가정</h3></div><button type="button" onClick={()=>onChange(defaultMarketSettings())}>시장 모형 기본값</button></div>
@@ -14,8 +20,8 @@ export function MarketModelInputs({settings:s,onChange,usesTam}:{settings:Market
     </div>
     {s.distribution==='studentT'&&<p className="mc-notice">Student-t의 기대수익률은 절단 전 분포의 중심입니다. BTC·QQQ 기본 수익률의 손실을 −99.9%에서 제한하므로 실제 평균은 달라질 수 있습니다. Jump는 그 이후 추가 적용됩니다. 하한 적용 횟수는 결과에서 확인할 수 있습니다.</p>}
     {s.regimeEnabled&&<>
-      <p className="muted">국면별 값이 위의 BTC·QQQ 기본 수익률·변동성을 대체합니다. {usesTam?'TAM 사용 시 Normal 국면은 TAM 중심을 유지하며, 다른 국면의 BTC 중심배율은 TAM 배율 × (1 + 해당 국면 수익률) / (1 + Normal 수익률)입니다.':'BTC와 QQQ 모두 해당 국면의 수익률 중심을 사용합니다.'} 상관계수는 변환 전 충격에 적용하며 실제 자산 수익률 상관과 다를 수 있습니다.</p>
-      <div className="mc-input-grid market-controls">{REGIMES.map(r=><fieldset key={r}><legend>{REGIME_LABELS[r]}</legend>{regimeFields.map(({key,label})=><label key={key}><span>{label}</span><input type="number" step="any" min={key==='correlation'?-1:undefined} max={key==='correlation'?1:undefined} value={s.regimes[r][key]} onChange={e=>onChange({...s,regimes:{...s.regimes,[r]:{...s.regimes[r],[key]:e.target.value}}})}/></label>)}</fieldset>)}</div>
+      <p className="muted">Normal의 성장률은 상단 입력과 연동됩니다. Risk-On·Crisis는 Normal 대비 상대 조정을 유지하며, 상단 성장률을 바꾸면 함께 이동합니다. 국면별 변동성은 따로 적용합니다. 상관계수는 변환 전 충격에 적용하며 실제 자산 수익률 상관과 다를 수 있습니다.</p>
+      <div className="mc-input-grid market-controls">{REGIMES.map(r=><fieldset key={r}><legend>{REGIME_LABELS[r]}</legend>{regimeFields.map(({key,label})=><label key={key}><span>{label}</span><input type="number" step="any" min={key==='correlation'?-1:undefined} max={key==='correlation'?1:undefined} disabled={r==='normal'&&(key==='btcMean'||key==='stockMean')} value={key==='btcMean'||key==='stockMean'?Number.isFinite(displayedReturn(r,key))?Number(displayedReturn(r,key).toFixed(6)):'':s.regimes[r][key]} onChange={e=>editRegime(r,key,e.target.value)}/></label>)}</fieldset>)}</div>
       <div className="table-scroll"><table className="transition-table"><caption>연간 전이확률 (%) · 행: 현재 국면 → 열: 다음 국면 · 각 행 합계 100%</caption><thead><tr><th>현재 → 다음</th>{REGIMES.map(r=><th key={r}>{REGIME_LABELS[r]}</th>)}<th>합계</th></tr></thead><tbody>{REGIMES.map(from=>{const total=REGIMES.reduce((sum,to)=>sum+Number(s.transitions[from][to]),0);const valid=REGIMES.every(to=>s.transitions[from][to].trim()!==''&&Number(s.transitions[from][to])>=0&&Number(s.transitions[from][to])<=100)&&Math.abs(total-100)<1e-8;return <tr key={from}><th>{REGIME_LABELS[from]}</th>{REGIMES.map(to=><td key={to}><input aria-label={`${REGIME_LABELS[from]}에서 ${REGIME_LABELS[to]} 전이확률 (%)`} aria-invalid={!valid} type="number" step="any" min="0" max="100" value={s.transitions[from][to]} onChange={e=>onChange({...s,transitions:{...s.transitions,[from]:{...s.transitions[from],[to]:e.target.value}}})}/></td>)}<td className={valid?'':'field-error'}>{Number.isFinite(total)?`${total.toFixed(2)}%`:'입력 확인'}{!valid&&' · 합계 100% 필요'}</td></tr>})}</tbody></table></div>
     </>}
     <p className="muted">모든 기본값은 설명용 가정입니다. 국면 전환·Jump를 끄고 Normal을 선택하면 기존 STEP 7과 같은 계산을 사용합니다. Student-t는 공통 충격 크기를 공유하므로 국면을 꺼 상관계수가 0이어도 두 자산의 극단적 움직임 크기는 독립이 아닙니다.</p>

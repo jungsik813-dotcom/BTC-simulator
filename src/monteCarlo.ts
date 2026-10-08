@@ -1,25 +1,22 @@
 import { simulate, type Assumptions } from './simulation.ts';
-import type { TamAdoptionAssumptions } from './tam.ts';
 import { defaultMarketAssumptions, validateMarket, correlatedShocks, nextRegime, sampleJump, STUDENT_MIN_FACTOR, type MarketAssumptions, type Regime } from './marketModel.ts';
 
 export interface MonteCarloAssumptions {
   paths: number; seed: number; btcMean: number; btcVolatility: number;
   stockMean: number; stockVolatility: number; inflationMean: number; inflationVolatility: number;
   fxMean: number; fxVolatility: number; minBtcReturn: number; maxBtcReturn: number;
-  btcCenter: 'return'|'tam'; limitBtcReturns: boolean;
+  limitBtcReturns: boolean;
 }
+export const MONTE_CARLO_PATHS=100000;
 export const defaultMonteCarlo: MonteCarloAssumptions = {
-  paths:10000, seed:42, btcMean:10, btcVolatility:60, stockMean:7, stockVolatility:20,
+  paths:MONTE_CARLO_PATHS, seed:42, btcMean:10, btcVolatility:60, stockMean:7, stockVolatility:20,
   inflationMean:2, inflationVolatility:1, fxMean:1400, fxVolatility:10,
-  minBtcReturn:-80, maxBtcReturn:300, btcCenter:'return', limitBtcReturns:false,
+  minBtcReturn:-80, maxBtcReturn:300, limitBtcReturns:false,
 };
 export interface MonteCarloRequest {
   portfolio:Assumptions;
   assumptions:MonteCarloAssumptions;
-  // 시작 연도는 현물 가격, 이후는 TAM의 KRW 가격. 실행 시점의 가정을 고정한다.
-  btcCentersKrw?:number[];
   market?:MarketAssumptions;
-  tamAdoption?:TamAdoptionAssumptions;
 }
 export interface Percentiles { p10:number;p25:number;p50:number;p75:number;p90:number;mean:number }
 export interface MonteCarloYear {year:number;nominal:Percentiles;real:Percentiles;regimeCounts?:Record<Regime,number>}
@@ -28,13 +25,12 @@ export interface MonteCarloResult {rows:MonteCarloYear[];paths:number;seed:numbe
 export type MonteCarloMessage = {type:'progress';percent:number}|{type:'result';result:MonteCarloResult}|{type:'error';message:string};
 
 export function validateMonteCarlo(a:MonteCarloAssumptions):void {
-  if(![1000,10000,100000].includes(a.paths))throw new Error('시뮬레이션 횟수는 1,000 / 10,000 / 100,000 중 선택하세요.');
+  if(a.paths!==MONTE_CARLO_PATHS)throw new Error('Monte Carlo는 항상 100,000회로 실행합니다.');
   if(!Number.isInteger(a.seed)||a.seed<0||a.seed>4294967295)throw new Error('난수 seed는 0~4,294,967,295의 정수여야 합니다.');
   if(![a.btcMean,a.btcVolatility,a.stockMean,a.stockVolatility,a.inflationMean,a.inflationVolatility,a.fxMean,a.fxVolatility,a.minBtcReturn,a.maxBtcReturn].every(Number.isFinite))throw new Error('Monte Carlo 가정을 유효한 숫자로 입력해 주세요.');
   if(a.btcMean<=-100||a.stockMean<=-100||a.inflationMean<=-100)throw new Error('기대수익률과 평균 물가상승률은 -100%보다 커야 합니다.');
   if([a.btcVolatility,a.stockVolatility,a.inflationVolatility,a.fxVolatility].some(v=>v<0))throw new Error('변동성은 음수일 수 없습니다.');
   if(a.fxMean<=0)throw new Error('USD/KRW 평균은 0보다 커야 합니다.');
-  if(a.btcCenter!=='return'&&a.btcCenter!=='tam')throw new Error('BTC 중심 경로를 선택해 주세요.');
   if(typeof a.limitBtcReturns!=='boolean')throw new Error('BTC 수익률 제한 설정을 확인해 주세요.');
   if(a.limitBtcReturns&&(a.minBtcReturn<=-100||a.maxBtcReturn<a.minBtcReturn))throw new Error('BTC 수익률 하한은 -100%보다 커야 하며 상한 이하여야 합니다.');
 }
@@ -45,8 +41,7 @@ export function validateMonteCarloRequest(request:MonteCarloRequest):void {
   // 사용하지 않는 결정론적 CAGR 때문에 확률 실행을 막지 않는다.
   simulate({...p,btcReturn:0,stockReturn:0,inflation:0});
   const years=p.endYear-p.startYear+1;
-  if(years*a.paths>5_000_000)throw new Error('이 기간과 실행 횟수는 메모리 한도를 넘습니다. 기간이나 횟수를 줄여 주세요.');
-  if(a.btcCenter==='tam'&&(!request.btcCentersKrw||request.btcCentersKrw.length!==years||request.btcCentersKrw.some(v=>!Number.isFinite(v)||v<=0)))throw new Error('TAM 경로의 모든 연도 가격이 양수여야 합니다. TAM 가정을 확인해 주세요.');
+  if(years*a.paths>5_000_000)throw new Error('이 기간과 실행 횟수는 메모리 한도를 넘습니다. 시뮬레이션 기간을 줄여 주세요.');
 }
 
 export function seededUniform(seed:number):()=>number {
@@ -105,9 +100,7 @@ export function runMonteCarlo(request:MonteCarloRequest,onProgress?:(percent:num
     for(let t=1;t<years;t++){
       if(market.regimeEnabled){if(t>1)state=nextRegime(state,market.transitions,random());regimeCounts[t][state]++;}
       const regime=market.regimeEnabled?market.regimes[state]:undefined;
-      let btcMean=a.btcCenter==='tam'?request.btcCentersKrw![t]/(t===1?p.btcPrice:request.btcCentersKrw![t-1]):1+(regime?.btcMean??a.btcMean)/100;
-      // TAM remains the Normal-state center; other states apply relative gross-return shifts.
-      if(regime&&a.btcCenter==='tam')btcMean*=(1+regime.btcMean/100)/(1+market.regimes.normal.btcMean/100);
+      const btcMean=1+(regime?.btcMean??a.btcMean)/100;
       const stockMean=1+(regime?.stockMean??a.stockMean)/100;
       const btcSigma=(regime?.btcVolatility??a.btcVolatility)/100,stockSigma=(regime?.stockVolatility??a.stockVolatility)/100;
       const [btcShock,stockShock]=correlatedShocks(market.distribution,market.degreesOfFreedom,regime?.correlation??0,random,z);

@@ -3,10 +3,9 @@ import assert from 'node:assert/strict';
 import { defaults, simulate } from './simulation.ts';
 import { defaultMonteCarlo, runMonteCarlo, percentile, seededUniform, standardNormal, lognormalFactor, validateMonteCarloRequest, type MonteCarloAssumptions, type MonteCarloRequest } from './monteCarlo.ts';
 import { defaultMonteCarloSettings, makeMonteCarloRequest, parseMonteCarloSettings } from './monteCarloSettings.ts';
-import { defaultTamAssumptions } from './tam.ts';
 
 const close=(actual:number,expected:number,tolerance=1e-10)=>assert.ok(Math.abs(actual-expected)<=Math.max(1,Math.abs(expected))*tolerance,`${actual} != ${expected}`);
-const fixed:MonteCarloAssumptions={...defaultMonteCarlo,paths:1000,btcVolatility:0,stockVolatility:0,inflationVolatility:0,fxVolatility:0};
+const fixed:MonteCarloAssumptions={...defaultMonteCarlo,paths:100000,btcVolatility:0,stockVolatility:0,inflationVolatility:0,fxVolatility:0};
 const request=(assumptions:Partial<MonteCarloAssumptions>={}):MonteCarloRequest=>({portfolio:{...defaults},assumptions:{...fixed,...assumptions}});
 
 test('변동성이 0이면 모든 분위수와 평균이 기존 CAGR 계산과 일치한다',()=>{
@@ -14,17 +13,8 @@ test('변동성이 0이면 모든 분위수와 평균이 기존 CAGR 계산과 �
   assert.equal(result.rows.length,20);
   result.rows.forEach((row,i)=>{for(const metric of ['nominal','real'] as const)for(const value of Object.values(row[metric]))close(value,expected[i][metric])});
 });
-test('TAM 중심과 변동성 0은 실제 시작 가격 및 연도별 TAM 자산 계산과 일치한다',()=>{
-  const settings=defaultMonteCarloSettings();settings.btcCenter='tam';
-  const req=makeMonteCarloRequest(defaults,settings,defaultTamAssumptions);
-  req.assumptions={...fixed,btcCenter:'tam'};
-  const expected=simulate(defaults,Object.fromEntries(req.btcCentersKrw!.map((price,i)=>[defaults.startYear+i,price])));
-  const result=runMonteCarlo(req);
-  assert.equal(req.btcCentersKrw![0],defaults.btcPrice);
-  result.rows.forEach((row,i)=>{close(row.nominal.p50,expected[i].nominal);close(row.real.p50,expected[i].real)});
-});
 test('고정 seed 재현, 다른 seed 변화, 분위수 정렬 및 진행률 완료',()=>{
-  const req=request({...defaultMonteCarlo,paths:1000});
+  const req=request({...defaultMonteCarlo,paths:100000});
   const progress:number[]=[];
   const first=runMonteCarlo(req,p=>progress.push(p));
   assert.deepEqual(first,runMonteCarlo(req));
@@ -41,7 +31,7 @@ test('분위수는 음수를 포함한 표본에서 선형 보간한다',()=>{
 test('1년 FX 표본에 동일 환율로 BTC와 QQQ를 환산하고 연말 KRW 납입액은 보존한다',()=>{
   const req=request({fxVolatility:30});req.portfolio={...defaults,endYear:2027};
   const z=standardNormal(seededUniform(fixed.seed)),samples:number[]=[];
-  for(let i=0;i<1000;i++){
+  for(let i=0;i<100000;i++){
     z();z();z();const fx=lognormalFactor(fixed.fxMean,.3,z());
     samples.push((defaults.btcQuantity*defaults.btcPrice*1.1+defaults.stocks*1.07)*fx/fixed.fxMean+12*(defaults.monthlyBtc+defaults.monthlyStocks)+defaults.cash-defaults.debt*1.04);
   }
@@ -78,11 +68,31 @@ test('입력 오류와 메모리 한도를 실행 전에 거부한다',()=>{
   for(const assumptions of [{paths:5},{seed:-1},{seed:1.5},{fxMean:0},{btcVolatility:-1},{stockMean:-100},{inflationMean:NaN},{limitBtcReturns:true,minBtcReturn:-100},{limitBtcReturns:true,minBtcReturn:10,maxBtcReturn:0}] as Partial<MonteCarloAssumptions>[])assert.throws(()=>validateMonteCarloRequest(request(assumptions)));
   assert.throws(()=>validateMonteCarloRequest({...request({paths:100000}),portfolio:{...defaults,endYear:2200}}));
   assert.throws(()=>runMonteCarlo(request({btcVolatility:1e8})),/범위/);
-  const req=request({btcCenter:'tam'});assert.throws(()=>validateMonteCarloRequest(req));
-  req.btcCentersKrw=Array(20).fill(0);assert.throws(()=>validateMonteCarloRequest(req));
 });
-test('문자열 설정을 검증하고 초기 10,000회와 BTC 중심 선택을 반영한다',()=>{
-  const settings=defaultMonteCarloSettings();assert.equal(parseMonteCarloSettings(settings).paths,10000);
+test('문자열 설정을 검증하고 100,000회 고정 실행을 반영한다',()=>{
+  const settings=defaultMonteCarloSettings();assert.equal(parseMonteCarloSettings(settings).paths,100000);
   settings.inputs.seed='';assert.throws(()=>parseMonteCarloSettings(settings));
-  settings.inputs.seed='42';settings.btcCenter='tam';assert.throws(()=>makeMonteCarloRequest(defaults,settings));
+  settings.inputs.seed='42';assert.equal(makeMonteCarloRequest(defaults,settings).assumptions.seed,42);
+});
+
+test('상단 성장률·물가를 연동하고 오래된 별도 수익률·횟수 입력을 무시한다',()=>{
+ const settings=defaultMonteCarloSettings();
+ Object.assign(settings.inputs,{btcMean:'10',stockMean:'7',inflationMean:'2',paths:'1000'});
+ const portfolio={...defaults,btcReturn:20,stockReturn:9,inflation:3,endYear:2028};
+ const first=makeMonteCarloRequest(portfolio,settings);
+ assert.equal(first.assumptions.paths,100000);assert.equal(first.assumptions.btcMean,20);assert.equal(first.assumptions.stockMean,9);assert.equal(first.assumptions.inflationMean,3);
+ const next=makeMonteCarloRequest({...portfolio,btcReturn:25},settings);
+ assert.equal(next.assumptions.btcMean,25);assert.equal(first.assumptions.btcMean,20);
+ for(const key of ['btcVolatility','stockVolatility','fxVolatility','inflationVolatility'] as const)settings.inputs[key]='0';
+ const expected=simulate(portfolio),actual=runMonteCarlo(makeMonteCarloRequest(portfolio,settings));
+ assert.equal(actual.paths,100000);actual.rows.forEach((r,i)=>{close(r.nominal.p50,expected[i].nominal);close(r.real.p50,expected[i].real)});
+});
+
+test('국면을 사용해도 Normal 수익률은 상단 가정이며 상대 국면 차이를 유지한다',()=>{
+ const settings=defaultMonteCarloSettings();settings.market.regimeEnabled=true;
+ const original=structuredClone(settings);
+ const request=makeMonteCarloRequest({...defaults,btcReturn:20,stockReturn:9},settings);
+ assert.equal(request.market!.regimes.normal.btcMean,20);assert.equal(request.market!.regimes.normal.stockMean,9);
+ close(request.market!.regimes.riskOn.btcMean,((1.2*1.25/1.1)-1)*100);
+ assert.deepEqual(settings,original);
 });
