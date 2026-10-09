@@ -1,5 +1,5 @@
 import { defaultMarketAssumptions, REGIMES, validateMarket, type MarketAssumptions, type Regime, type RegimeAssumptions } from './marketModel.ts';
-type Scalars='degreesOfFreedom'|'crashProbability'|'crashMagnitude'|'maniaProbability'|'maniaMagnitude';
+type Scalars='degreesOfFreedom'|'jumpIntensity';
 export interface MarketSettings {
   distribution:MarketAssumptions['distribution'];regimeEnabled:boolean;initialRegime:Regime;jumpEnabled:boolean;
   inputs:Record<Scalars,string>;
@@ -9,7 +9,7 @@ export interface MarketSettings {
 export function defaultMarketSettings():MarketSettings {
   const a=defaultMarketAssumptions();
   return {distribution:a.distribution,regimeEnabled:a.regimeEnabled,initialRegime:a.initialRegime,jumpEnabled:a.jumpEnabled,
-    inputs:Object.fromEntries(['degreesOfFreedom','crashProbability','crashMagnitude','maniaProbability','maniaMagnitude'].map(k=>[k,String(a[k as Scalars])])) as MarketSettings['inputs'],
+    inputs:Object.fromEntries(['degreesOfFreedom','jumpIntensity'].map(k=>[k,String(a[k as Scalars])])) as MarketSettings['inputs'],
     regimes:Object.fromEntries(REGIMES.map(r=>[r,Object.fromEntries(Object.entries(a.regimes[r]).map(([k,v])=>[k,String(v)]))])) as MarketSettings['regimes'],
     transitions:Object.fromEntries(REGIMES.map(r=>[r,Object.fromEntries(REGIMES.map(k=>[k,String(a.transitions[r][k])]))])) as MarketSettings['transitions']};
 }
@@ -24,4 +24,17 @@ export function parseMarketSettings(s:MarketSettings):MarketAssumptions {
     for(const target of REGIMES)a.transitions[state][target]=number(s.transitions?.[state]?.[target]);
   }
   validateMarket(a);return a;
+}
+
+// Whitelist retained BTC settings when migrating older multi-asset saves.
+export function cleanMarketSettings(s:MarketSettings):MarketSettings {
+  parseMarketSettings(s);
+  const clean=defaultMarketSettings();
+  clean.distribution=s.distribution;clean.regimeEnabled=s.regimeEnabled;clean.initialRegime=s.initialRegime;clean.jumpEnabled=s.jumpEnabled;
+  for(const key of Object.keys(clean.inputs) as Scalars[])clean.inputs[key]=s.inputs[key];
+  for(const state of REGIMES){
+    for(const key of Object.keys(clean.regimes[state]) as (keyof RegimeAssumptions)[])clean.regimes[state][key]=s.regimes[state][key];
+    for(const target of REGIMES)clean.transitions[state][target]=s.transitions[state][target];
+  }
+  return clean;
 }

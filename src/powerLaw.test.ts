@@ -1,8 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {defaults,simulate} from './simulation.ts';
+import {defaults as appDefaults,simulate} from './simulation.ts';
 import {DEFAULT_POWER_LAW_BETA as B,daysSinceGenesis,parsePowerLawBeta,powerLawPrices,simulatePowerLaw} from './powerLaw.ts';
 import {decodeSettings} from './settings.ts';
+// Positive holdings fixture keeps return and contribution checks meaningful.
+const defaults={...appDefaults,btcQuantity:1,monthlyBtc:500000};
 const close=(a:number,b:number)=>assert.ok(Math.abs(a-b)<=1e-10*Math.max(1,Math.abs(b)),a+' != '+b);
 
 test('annual snapshots have positive Genesis ages and include leap years',()=>{
@@ -10,7 +12,7 @@ test('annual snapshots have positive Genesis ages and include leap years',()=>{
  assert.equal(daysSinceGenesis(2021)-daysSinceGenesis(2020),366);
  assert.throws(()=>daysSinceGenesis(2009));assert.throws(()=>daysSinceGenesis(2201));
 });
-test('changing beta preserves the exact starting price, assets and purchasing power',()=>{
+test('changing beta preserves the exact starting price, BTC quantity and valuation',()=>{
  const market=simulate(defaults)[0];
  for(const beta of [0,1,B,B+.1,8]) assert.deepEqual(simulatePowerLaw(defaults,beta)[0],market);
 });
@@ -36,8 +38,6 @@ test('purchases and valuations use the same power law price, independent of CAGR
   const r=rows[i],previous=rows[i-1];
   close((r.btcQuantity-previous.btcQuantity)*r.btcPrice,a.monthlyBtc*12);
   close(r.btcValue,r.btcQuantity*r.btcPrice);
-  close(r.nominal,r.btcValue+r.stocks+r.cash-r.debt);
-  close(r.real,r.nominal/(1+a.inflation/100)**i);
  }
  const faster=simulatePowerLaw(a,B+1);
  assert.ok(faster[1].btcPrice>rows[1].btcPrice);
@@ -55,13 +55,10 @@ test('beta zero is flat and preserves full investment contributions',()=>{
  assert.equal(rows[1].btcPrice,a.btcPrice);
  close(rows[1].btcQuantity,a.btcQuantity+a.monthlyBtc*12/a.btcPrice);
 });
-test('non-BTC assets and negative net worth remain consistent with the shared model',()=>{
- const a={...defaults,stocks:0,cash:0,debt:1e12};
- const rows=simulatePowerLaw(a,B),market=simulate(a);
- for(let i=0;i<rows.length;i++){
-  assert.equal(rows[i].stocks,market[i].stocks);assert.equal(rows[i].cash,market[i].cash);assert.equal(rows[i].debt,market[i].debt);
- }
- assert.ok(rows[0].nominal<0);assert.ok(rows[1].nominal<0);
+test('with no initial holdings the first purchase has exactly the contributed value',()=>{
+ const a={...defaults,btcQuantity:0,endYear:2027};
+ const rows=simulatePowerLaw(a,B);
+ assert.equal(rows[0].btcValue,0);close(rows[1].btcValue,a.monthlyBtc*12);
 });
 test('invalid beta, dates, starting prices and overflow are rejected',()=>{
  for(const v of ['', '-1','NaN','Infinity'])assert.throws(()=>parsePowerLawBeta(v));
