@@ -1,7 +1,8 @@
+import { useChartLayout } from './useChartLayout';
 import { useCurrency } from './CurrencyProvider';
 import { InteractiveChart } from './InteractiveChart';
 import { type Inputs } from './settings';
-import { type MonteCarloRequest, type MonteCarloResult, type MonteCarloYear } from './monteCarlo';
+import { MONTE_CARLO_QUANTILES, type MonteCarloRequest, type MonteCarloResult, type MonteCarloYear } from './monteCarlo';
 import { type MonteCarloSettings } from './monteCarloSettings';
 import { MarketModelInputs, MarketSnapshot } from './MarketModelInputs';
 import { REGIMES, REGIME_LABELS } from './marketModel';
@@ -9,25 +10,26 @@ import './monteCarlo.css';
 import { parseMarketSettings } from './marketSettings';
 
 type NumericKey=keyof MonteCarloSettings['inputs'];
-const quantiles=['p10','p25','p50','p75','p90','mean'] as const;
-const labels=['P10','P25','P50 · 중앙값','P75','P90','평균 · 참고'];
+const quantiles=[...MONTE_CARLO_QUANTILES,'mean'] as const;
+const labels=['P20','P30','P40','P50 · 중앙값','P60','P70','P80','평균 · 참고'];
+const quantileColors={p20:'#986b5c',p30:'#7a8170',p40:'#577b87',p50:'#175442',p60:'#b08b40',p70:'#856c9d',p80:'#615195'};
+
 
 export function MonteCarloFanChart({rows}:{rows:MonteCarloYear[]}) {
   const display=useCurrency();
-  const width=1000,height=350,left=110,right=25,top=25,bottom=45;
-  const min=Math.min(0,...rows.map(r=>r.btcValue.p10)),max=Math.max(1,...rows.map(r=>r.btcValue.p90));
+  const {ref,width,height,left,right,top,bottom}=useChartLayout(1000,350,110);
+  const min=Math.min(0,...rows.map(r=>r.btcValue.p20)),max=Math.max(1,...rows.map(r=>r.btcValue.p80));
   const x=(i:number)=>left+i/Math.max(1,rows.length-1)*(width-left-right);
   const y=(v:number)=>top+(max-v)/(max-min)*(height-top-bottom);
-  const points=(key:typeof quantiles[number])=>rows.map((r,i)=>`${x(i)},${y(r.btcValue[key])}`);
-  const band=(lower:'p10'|'p25',upper:'p90'|'p75')=>[...points(upper),...points(lower).reverse()].join(' ');
-  return <InteractiveChart width={width} height={height} left={left} right={right} top={top} bottom={bottom} label={'BTC 평가액의 연도별 P10~P90 분포와 중앙값'} data={rows.map(r=>({year:r.year,entries:(['p10','p25','p50','p75','p90'] as const).map((key,i)=>({label:['낮은 쪽 · P10','P25','중앙값 · P50','P75','높은 쪽 · P90'][i],value:display.money(r.btcValue[key]).replace(' KRW','원'),color:key==='p50'?'#175442':'#9dc5b5',y:y(r.btcValue[key])}))}))}>
+  const points=(key:typeof MONTE_CARLO_QUANTILES[number])=>rows.map((r,i)=>[x(i),y(r.btcValue[key])].join(','));
+  const band=(lower:'p20'|'p30',upper:'p80'|'p60')=>[...points(upper),...points(lower).reverse()].join(' ');
+  return <div ref={ref} className="responsive-chart"><InteractiveChart width={width} height={height} left={left} right={right} top={top} bottom={bottom} label="BTC 평가액의 연도별 P20·P30·P40·P50·P60·P70·P80" data={rows.map(r=>({year:r.year,entries:MONTE_CARLO_QUANTILES.map(key=>({label:key==='p50'?'P50 · 중앙값':key.toUpperCase(),value:display.money(r.btcValue[key]),color:quantileColors[key],y:y(r.btcValue[key])}))}))}>
     {[0,1,2,3,4].map(i=>{const v=min+(max-min)*i/4;return <g key={i}><line x1={left} x2={width-right} y1={y(v)} y2={y(v)} stroke="#e5e9ee"/><text x={left-12} y={y(v)+4} textAnchor="end">{display.compact(v)}</text></g>})}
-    <polygon points={band('p10','p90')} fill="#ddebe6"/>
-    <polygon points={band('p25','p75')} fill="#9dc5b5"/>
-    <polyline points={points('p50').join(' ')} fill="none" stroke="#175442" strokeWidth="3"/>
-    {rows.map((r,i)=><g key={r.year}>{rows.length===1&&<line x1={x(i)} x2={x(i)} y1={y(r.btcValue.p10)} y2={y(r.btcValue.p90)} stroke="#9dc5b5" strokeWidth="8"/>}<circle cx={x(i)} cy={y(r.btcValue.p50)} r="3" fill="#175442"><title>{`${r.year}년 중앙값: ${display.money(r.btcValue.p50)}`}</title></circle></g>)}
+    <polygon points={band('p20','p80')} fill="#e8f0eb"/>
+    <polygon points={band('p30','p60')} fill="#c9dfd0"/>
+    {MONTE_CARLO_QUANTILES.map(key=><g key={key}><polyline points={points(key).join(' ')} fill="none" stroke={quantileColors[key]} strokeWidth={key==='p50'?3:1.7} strokeDasharray={key==='p20'||key==='p80'?'6 4':undefined}/>{rows.map((r,i)=><circle key={r.year} cx={x(i)} cy={y(r.btcValue[key])} r={key==='p50'?3:2} fill={quantileColors[key]}/>)}</g>)}
     {[...new Set([0,Math.floor((rows.length-1)/2),rows.length-1])].map(i=><text key={i} x={x(i)} y={height-12} textAnchor="middle">{rows[i].year}</text>)}
-  </InteractiveChart>;
+  </InteractiveChart></div>;
 }
 
 export function MonteCarloResults({result}:{result:MonteCarloResult}) {
@@ -35,8 +37,8 @@ export function MonteCarloResults({result}:{result:MonteCarloResult}) {
   const d=result.diagnostics;
   return <>
     {d&&<details className="ui-inline-disclosure"><summary>계산 상세 정보</summary><p className="muted">전체 {d.pathYears.toLocaleString()}개 경로·연도에서 급락 {d.crashes.toLocaleString()}회, 급등 {d.manias.toLocaleString()}회 · Student-t 손실 하한 적용: BTC {d.btcFloors.toLocaleString()}회. 이벤트 횟수는 최종 BTC 상·하한 적용 전 발생 횟수입니다.</p></details>}
-    <div className="mc-legend"><span><i className="mc-outer"/>가운데 80%의 결과</span><span><i className="mc-inner"/>가운데 50%의 결과</span><span><i className="mc-line"/>중앙값</span></div>
-    <p className="muted">음영은 각 연도의 BTC 평가액 분포입니다. 하나의 투자 경로나 실제 결과의 보장 범위를 뜻하지 않습니다. P10은 결과의 10%가 그 값 이하라는 의미입니다.</p>
+    <div className="mc-legend">{MONTE_CARLO_QUANTILES.map(key=><span key={key}><i style={{background:quantileColors[key],height:3}}/>{key==='p50'?'P50 · 중앙값':key.toUpperCase()}</span>)}</div>
+    <p className="muted">각 선은 해당 연도의 BTC 평가액 분위수입니다. P20은 결과의 20%가 그 값 이하라는 뜻입니다. 옅은 음영은 P20~P80의 60% 범위, 진한 음영은 P30~P60의 30% 범위이며 중앙값을 중심으로 대칭인 범위는 아닙니다.</p>
     <details className="ui-inline-disclosure"><summary>연도별 자세한 결과</summary><div className="table-scroll"><table><caption>연도별 BTC 평가액 · {display.currency}</caption><thead><tr><th>연도</th>{labels.map(label=><th key={label}>{label}</th>)}</tr></thead><tbody>{result.rows.map(row=><tr key={row.year}><th>{row.year}</th>{quantiles.map(q=><td key={q} className={q==='p50'?'mc-median-cell':undefined}>{display.money(row.btcValue[q])}</td>)}</tr>)}</tbody></table></div></details>
     {result.rows.some(r=>r.regimeCounts)&&<details className="mc-snapshot"><summary>연도별 시장 국면 비율</summary><p className="muted">각 연도에 실제로 추출된 경로 비율입니다. 시작 연도에는 투자 수익률을 적용하지 않습니다.</p><div className="table-scroll"><table><thead><tr><th>연도</th>{REGIMES.map(r=><th key={r}>{REGIME_LABELS[r]}</th>)}</tr></thead><tbody>{result.rows.filter(r=>r.regimeCounts).map(row=><tr key={row.year}><th>{row.year}</th>{REGIMES.map(r=><td key={r}>{(row.regimeCounts![r]/result.paths*100).toFixed(2)}%</td>)}</tr>)}</tbody></table></div></details>}
   </>;

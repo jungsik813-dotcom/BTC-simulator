@@ -1,0 +1,51 @@
+.responsive-chart,.workspace>*{min-width:0}
+.responsive-chart .chart-scroll svg{min-width:0}
+.chart-mobile-controls{display:none}
+@media(max-width:640px){
+  .simple-app{padding:22px 12px 26px}
+  .simple-app .app-header{margin-bottom:22px}
+  .simple-app .assumptions-card,.simple-app .result-card{padding:20px 16px}
+  .simple-app .fields{gap:18px 12px}
+  .simple-app .fields label>span,.market-model label>span{font-size:13px;line-height:1.5}
+  .simple-app .input-wrap{min-height:48px}
+  .simple-app .input-wrap input,.simple-app select,.market-model select{font-size:16px;min-height:44px;min-width:0}
+  .simple-app button{min-height:44px}
+  .simple-app .check-label{min-height:44px;font-size:13px;line-height:1.5}
+  .simple-app input[type=checkbox]{width:20px;height:20px;flex:0 0 20px}
+  .simple-app summary{min-height:44px;line-height:1.6;padding-top:10px;padding-bottom:10px}
+  .simple-app .ui-inline-disclosure{padding:12px;margin-top:18px}
+  .simple-app .ui-inline-disclosure .ui-inline-disclosure{padding:10px}
+  .simple-app .muted,.simple-app .notes{font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+  .simple-app .app-header-actions{align-items:stretch}
+  .simple-app .currency-controls{max-width:none}
+  .simple-app .currency-controls-top{justify-content:space-between;flex-wrap:wrap}
+  .simple-app .currency-switch button{font-size:14px;padding:8px 16px}
+  .simple-app .currency-controls-rate{justify-content:space-between;flex-wrap:wrap}
+  .simple-app .currency-controls small{font-size:11px;line-height:1.6}
+  .simple-app .segment{gap:4px}
+  .simple-app .segment button{padding:10px 6px;font-size:13px;white-space:normal}
+  .responsive-chart svg{margin-top:18px}
+  .responsive-chart svg text{font-size:12px}
+  .chart-mobile-controls{display:block;padding:12px 0 8px}
+  .chart-mobile-controls label{display:flex;flex-direction:column;gap:4px;font-size:14px;font-weight:600}
+  .chart-mobile-controls input[type=range]{width:100%;margin:0;min-height:44px;accent-color:#246957;cursor:pointer}
+  .chart-mobile-controls>div{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .chart-mobile-controls button{border:1px solid #cbd8d0;border-radius:8px;background:#fff;color:#175442;font-size:14px}
+  .chart-mobile-controls button:disabled{opacity:.4;cursor:default}
+  .interactive-chart .chart-tooltip{position:static;width:100%;margin-top:10px;padding:14px 12px;box-shadow:none}
+  .interactive-chart .chart-tooltip-row{grid-template-columns:minmax(0,1fr);gap:2px;padding:7px 0}
+  .interactive-chart .chart-tooltip-row strong{text-align:left;padding-left:17px;font-size:16px}
+  .chart-interaction-hint{font-size:12px;line-height:1.6}
+  .simple-app .mc-legend{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 8px;font-size:12px}
+  .simple-app .mc-actions{align-items:stretch}
+  .simple-app .mc-actions button{flex:1 1 140px}
+  .table-scroll{max-width:100%;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+  .table-scroll th:first-child{position:sticky;left:0;background:#f7f9f6;z-index:1}
+  .simple-app .market-section-heading{align-items:stretch}
+  .simple-app .regime-default-summary p{display:flex;flex-direction:column;gap:4px}
+}
+@media(max-width:420px){
+  .simple-app .fields{grid-template-columns:minmax(0,1fr)}
+  .simple-app .app-save{max-width:none;white-space:normal;line-height:1.6}
+  .simple-app .market-model fieldset{padding:12px}
+}

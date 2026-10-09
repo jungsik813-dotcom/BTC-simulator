@@ -11,6 +11,7 @@ import { DEFAULT_POWER_LAW_BETA, parsePowerLawBeta, simulatePowerLaw } from './p
 import { BtcChart } from './BtcChart';
 import './style.css';
 import './simpleUi.css';
+import './mobile.css';
 
 type ChartMode='cagr'|'monteCarlo'|'powerLaw';
 const fields:{key:keyof Assumptions;label:string;unit:string;step?:string}[]=[

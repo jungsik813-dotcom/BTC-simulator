@@ -52,7 +52,7 @@ test('국면 기본 수익률을 적용한 1년 가격 평균과 중앙값이 �
 });
 test('Student-t의 손실 하한 횟수를 기록하고 가격을 양수로 유지한다',()=>{
   const req=request();req.market!.distribution='studentT';req.assumptions.btcVolatility=150;req.portfolio.endYear=2027;
-  const result=runMonteCarlo(req);assert.ok(result.diagnostics.btcFloors>0);assert.ok(result.rows[1].btcValue.p10>0);
+  const result=runMonteCarlo(req);assert.ok(result.diagnostics.btcFloors>0);assert.ok(result.rows[1].btcValue.p20>0);
   req.assumptions.btcVolatility=0;
   close(runMonteCarlo(req).rows[1].btcValue.p50,1.1e8);
 });

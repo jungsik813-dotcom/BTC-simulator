@@ -21,7 +21,7 @@ test('고정 seed 재현과 다른 seed 변화, 분위수 정렬 및 진행률 �
  const progress:number[]=[],first=runMonteCarlo(req,p=>progress.push(p));
  assert.deepEqual(first,runMonteCarlo(req));
  assert.notDeepEqual(first,runMonteCarlo({...req,assumptions:{...req.assumptions,seed:43}}));
- for(const row of first.rows){const q=row.btcValue;assert.ok(q.p10<=q.p25&&q.p25<=q.p50&&q.p50<=q.p75&&q.p75<=q.p90)}
+ for(const row of first.rows){const q=row.btcValue;assert.ok(q.p20<=q.p30&&q.p30<=q.p40&&q.p40<=q.p50&&q.p50<=q.p60&&q.p60<=q.p70&&q.p70<=q.p80)}
  assert.equal(progress.at(-1),100);assert.deepEqual(progress,[...progress].sort((a,b)=>a-b));
 });
 test('1년 BTC 분포가 로그정규 이론의 평균·중앙값·꼬리 분위수와 맞는다',()=>{
@@ -30,8 +30,7 @@ test('1년 BTC 분포가 로그정규 이론의 평균·중앙값·꼬리 분위
  const initial=defaults.btcPrice*defaults.btcQuantity;
  close(q.mean,initial*1.1,.015);
  close(q.p50,initial*1.1*Math.exp(-.18),.015);
- close(q.p10,initial*1.1*Math.exp(-.18-.6*1.2815515655),.02);
- close(q.p90,initial*1.1*Math.exp(-.18+.6*1.2815515655),.02);
+ for(const [key,z] of [['p20',-.8416212336],['p30',-.5244005127],['p40',-.2533471031],['p60',.2533471031],['p70',.5244005127],['p80',.8416212336]] as const)close(q[key],initial*1.1*Math.exp(-.18+.6*z),.02);
 });
 test('처음 BTC가 없어도 1년 투자금은 모든 경로에서 보존된다',()=>{
  const req=request({btcVolatility:100});req.portfolio={...defaults,endYear:2027,btcQuantity:0,monthlyBtc:100000};
@@ -51,7 +50,7 @@ test('수익률 상·하한은 BTC 원화 가격 배율에 적용한다',()=>{
 });
 test('보유량·투자금 0과 시작=종료 연도를 처리한다',()=>{
  const req=request();req.portfolio={...defaults,btcQuantity:0,monthlyBtc:0,endYear:2027};
- assert.equal(runMonteCarlo(req).rows.at(-1)!.btcValue.p90,0);
+ assert.equal(runMonteCarlo(req).rows.at(-1)!.btcValue.p70,0);
  req.portfolio={...defaults,endYear:defaults.startYear};
  const only=runMonteCarlo(req);assert.equal(only.rows.length,1);close(only.rows[0].btcValue.p50,defaults.btcPrice*defaults.btcQuantity);
 });

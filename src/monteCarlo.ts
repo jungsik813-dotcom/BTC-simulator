@@ -17,7 +17,8 @@ export interface MonteCarloRequest {
   assumptions:MonteCarloAssumptions;
   market?:MarketAssumptions;
 }
-export interface Percentiles { p10:number;p25:number;p50:number;p75:number;p90:number;mean:number }
+export const MONTE_CARLO_QUANTILES=['p20','p30','p40','p50','p60','p70','p80'] as const;
+export interface Percentiles { p20:number;p30:number;p40:number;p50:number;p60:number;p70:number;p80:number;mean:number }
 export interface MonteCarloYear {year:number;btcValue:Percentiles;regimeCounts?:Record<Regime,number>}
 export interface MarketDiagnostics {crashes:number;manias:number;btcFloors:number;pathYears:number}
 export interface MonteCarloResult {rows:MonteCarloYear[];paths:number;seed:number;diagnostics:MarketDiagnostics}
@@ -75,7 +76,7 @@ function summarize(samples:Float64Array):Percentiles {
   let mean=0;
   for(const value of samples)mean+=value/samples.length;
   samples.sort();
-  const result={p10:percentile(samples,.1),p25:percentile(samples,.25),p50:percentile(samples,.5),p75:percentile(samples,.75),p90:percentile(samples,.9),mean};
+  const result={p20:percentile(samples,.2),p30:percentile(samples,.3),p40:percentile(samples,.4),p50:percentile(samples,.5),p60:percentile(samples,.6),p70:percentile(samples,.7),p80:percentile(samples,.8),mean};
   if(!Object.values(result).every(Number.isFinite))throw new Error('분포 집계가 계산 범위를 벗어났습니다. 가정을 줄여 주세요.');
   return result;
 }
