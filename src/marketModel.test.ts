@@ -45,8 +45,8 @@ test('국면 기본 수익률을 적용한 1년 가격 평균과 중앙값이 �
  const req=request(),m=req.market!;m.regimeEnabled=true;req.portfolio.endYear=2027;
  for(const state of REGIMES){
   m.initialRegime=state;const q=runMonteCarlo(req).rows[1].btcValue;
-  const mean=state==='bull'?1.9562:.5914;
-  const median=state==='bull'?1.75081:.52758;
+  const mean=state==='bull'?2.0957:0.3833;
+  const median=state==='bull'?1.8859282162048605:0.3080193019501586;
   close(q.mean,defaults.btcPrice*mean,.02);close(q.p50,defaults.btcPrice*median,.01);
  }
 });

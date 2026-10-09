@@ -5,7 +5,7 @@ import { DEFAULT_POWER_LAW_BETA, parsePowerLawBeta } from './powerLaw.ts';
 
 export type Inputs=Record<keyof Assumptions,string>;
 export interface SavedSettings {inputs:Inputs;monteCarloSettings:MonteCarloSettings;autoPrice:boolean;powerLawBeta:string}
-export const SETTINGS_VERSION=14;
+export const SETTINGS_VERSION=15;
 export const STORAGE_KEY='asset-simulator.settings.v2';
 export const LEGACY_STORAGE_KEY='asset-simulator.settings.v1';
 export const defaultInputs=():Inputs=>Object.fromEntries(Object.entries(defaults).map(([key,value])=>[key,String(value)])) as Inputs;
@@ -28,7 +28,7 @@ export function decodeSettings(raw:string|null):SavedSettings {
     inputs[key]=data.inputs[key];
   }
   parseInputs(inputs);
-  const monteCarloSettings=data.version>=5?decodeMonteCarloSettings(data.monteCarloSettings,data.version<13,data.version===13):defaultMonteCarloSettings();
+  const monteCarloSettings=data.version>=5?decodeMonteCarloSettings(data.monteCarloSettings,data.version<13,data.version===13,data.version<15):defaultMonteCarloSettings();
   if(data.version<12){
     monteCarloSettings.inputs.btcVolatility='49';
   }

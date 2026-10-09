@@ -14,7 +14,7 @@ export const STUDENT_MIN_FACTOR=.001;
 export function defaultMarketAssumptions():MarketAssumptions {
   return {
     distribution:'normal',degreesOfFreedom:5,regimeEnabled:true,initialRegime:'bull',
-    regimes:{bull:{btcMean:95.62,btcVolatility:47.10},bear:{btcMean:-40.86,btcVolatility:47.85}},
+    regimes:{bull:{btcMean:109.57,btcVolatility:45.93},bear:{btcMean:-61.67,btcVolatility:66.12}},
     // Duration assumption: expected bull spell 3 years, bear spell 1 year.
     transitions:{bull:{bull:66.67,bear:33.33},bear:{bull:100,bear:0}},
     jumpEnabled:true,jumpIntensity:1,

@@ -30,7 +30,7 @@ test('현재 BTC 전용 저장 형식을 복원한다',()=>{
 test('손상된 설정과 잘못된 BTC 입력을 거부한다',()=>{
  const expected=decodeSettings(null);
  assert.throws(()=>decodeSettings('{'));
- for(const version of [0,15,1.5])assert.throws(()=>decodeSettings(JSON.stringify({version,...expected})));
+ for(const version of [0,16,1.5])assert.throws(()=>decodeSettings(JSON.stringify({version,...expected})));
  assert.throws(()=>decodeSettings(JSON.stringify({version:11,...expected,inputs:{}})));
  assert.throws(()=>parseInputs({...defaultInputs(),btcQuantity:'-1'}));
  assert.throws(()=>parseInputs({...defaultInputs(),monthlyBtc:''}));
@@ -74,4 +74,15 @@ test('기존 낮은 변동성 설정은 Jump를 꺼서 이전하고 BTC 값을 �
  const saved=decodeSettings(null);saved.inputs.btcQuantity='2.5';saved.monteCarloSettings.market.regimes.bull.btcVolatility='0';
  const restored=decodeSettings(JSON.stringify({version:13,...saved}));
  assert.equal(restored.monteCarloSettings.market.jumpEnabled,false);assert.equal(restored.inputs.btcQuantity,'2.5');assert.equal(restored.monteCarloSettings.market.regimes.bull.btcVolatility,'0');
+});
+
+test('과거 기본 국면 값은 새 자료 기간으로 갱신하고 사용자 값·BTC 입력은 보존한다',()=>{
+ const saved=decodeSettings(null);saved.inputs.btcQuantity='2.5';saved.monteCarloSettings.inputs.seed='172';
+ saved.monteCarloSettings.market.regimes={bull:{btcMean:'95.62',btcVolatility:'47.1'},bear:{btcMean:'-40.86',btcVolatility:'47.85'}};
+ const next=decodeSettings(JSON.stringify({version:14,...saved}));
+ assert.deepEqual(next.monteCarloSettings.market.regimes,defaultMonteCarloSettings().market.regimes);
+ assert.deepEqual(next.inputs,saved.inputs);assert.equal(next.monteCarloSettings.inputs.seed,'172');
+ saved.monteCarloSettings.market.regimes.bull.btcMean='20';saved.monteCarloSettings.market.regimes.bear.btcVolatility='70';
+ const custom=decodeSettings(JSON.stringify({version:14,...saved}));
+ assert.equal(custom.monteCarloSettings.market.regimes.bull.btcMean,'20');assert.equal(custom.monteCarloSettings.market.regimes.bear.btcVolatility,'70');
 });

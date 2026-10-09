@@ -22,18 +22,26 @@ export function parseMonteCarloSettings(settings:MonteCarloSettings,portfolio:As
   parseMarketSettings(settings.market);
   return result;
 }
-export function decodeMonteCarloSettings(raw:unknown,legacy=false,oldJump=false):MonteCarloSettings {
+export function decodeMonteCarloSettings(raw:unknown,legacy=false,oldJump=false,updatedCalibration=false):MonteCarloSettings {
   if(!raw||typeof raw!=='object')throw new Error('저장된 Monte Carlo 설정 형식 오류');
   const data={...raw,market:legacy?defaultMarketSettings():(raw as MonteCarloSettings).market} as MonteCarloSettings;
+  if(updatedCalibration&&!legacy){
+    data.market=structuredClone(data.market);
+    const previous={bull:{btcMean:95.62,btcVolatility:47.10},bear:{btcMean:-40.86,btcVolatility:47.85}};
+    const next=defaultMarketSettings();
+    for(const state of ['bull','bear'] as const)for(const key of ['btcMean','btcVolatility'] as const){
+      if(Number(data.market.regimes?.[state]?.[key])===previous[state][key])data.market.regimes[state][key]=next.regimes[state][key];
+    }
+  }
   if(oldJump){
     data.market=structuredClone(data.market);
     data.market.inputs={...data.market.inputs,jumpIntensity:'1'};
     data.market.jumpEnabled=data.market.distribution==='normal';
   }
-  if(oldJump&&data.market.jumpEnabled){
+  if((oldJump||updatedCalibration)&&data.market.jumpEnabled){
     try{
       parseMonteCarloSettings(data);
-      if(!data.market.regimeEnabled)decomposeJumps(defaultMonteCarlo.btcMean,Number(data.inputs.btcVolatility),JUMP_CALIBRATION.all,1);
+      if(!data.market.regimeEnabled)decomposeJumps(defaultMonteCarlo.btcMean,Number(data.inputs.btcVolatility),JUMP_CALIBRATION.all,Number(data.market.inputs.jumpIntensity));
     }catch(error){
       if(error instanceof Error&&error.message.startsWith('총 변동성보다 Jump'))data.market.jumpEnabled=false;
       else throw error;

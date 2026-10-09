@@ -78,7 +78,7 @@ test('상단 BTC 수익률 연동과 100,000회 실행, 문자열 설정 검증'
 test('두 국면의 자료 기반 값은 CAGR 입력과 독립적으로 적용한다',()=>{
  const settings=defaultMonteCarloSettings(),original=structuredClone(settings);
  const first=makeMonteCarloRequest({...defaults,endYear:2027,btcReturn:10},settings),second=makeMonteCarloRequest({...defaults,endYear:2027,btcReturn:50},settings);
- assert.deepEqual(first.market!.regimes,{bull:{btcMean:95.62,btcVolatility:47.10},bear:{btcMean:-40.86,btcVolatility:47.85}});
+ assert.deepEqual(first.market!.regimes,{bull:{btcMean:109.57,btcVolatility:45.93},bear:{btcMean:-61.67,btcVolatility:66.12}});
  assert.deepEqual(first.market,second.market);
  assert.deepEqual(runMonteCarlo(first),runMonteCarlo(second));
  assert.deepEqual(settings,original);
